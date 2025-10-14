@@ -95,20 +95,20 @@ Follow these steps to get the project running on your local machine.
 
 ### **Step 1: Clone the Repository**
    ```
-  git clone https://github.com/Karanei-Kimutai/strathmore-password-reset.git  
-  cd strathmore-password-reset
+git clone https://github.com/Karanei-Kimutai/strathmore-password-reset.git  
+cd strathmore-password-reset
   ```
 ### **Step 2: Set Up the Virtual Environment**
 
 This isolates the project's dependencies from your system.
    ```
-   # Create the environment
+# Create the environment
   python3 -m venv venv  
 
-   # Activate it
+# Activate it
   source venv/bin/activate  # Linux/Mac/WSL  
 # OR 
-     venv\Scripts\activate     # Windows   
+  venv\Scripts\activate     # Windows   
   ```
 ### **Step 3: Install Dependencies**
 ```
@@ -131,7 +131,7 @@ Fill in the required variables. For Gmail, you **must** use an "App Password."
 
 Before running the main script, verify that your setup is correct:
 ```
-   python test_config.py   
+ python test_config.py   
 ```
 If all tests pass, you are ready to proceed!
 
@@ -140,7 +140,7 @@ If all tests pass, you are ready to proceed!
 
 Ensure your virtual environment is activated, then run the main script:
 ```
-   python strathmore_password_reset.py   
+ python strathmore_password_reset.py   
 ```
 **Alternative Method: Running with Docker**
 -------------------------------------------
@@ -160,7 +160,7 @@ Using Docker is an excellent alternative that avoids local setup and guarantees 
 
 Run the password reset anytime with a single command:
 ```
-  docker-compose up   
+ docker-compose up   
 ```
 The new password log will be saved in the passwords/ directory.
 
@@ -221,13 +221,13 @@ strathmore-password-reset/
   * **Why it happens:** The Docker container runs as the root user, so any files it creates (like the password logs) are owned by root. Your user on your machine does not have permission to read them.  
   * **Solution:** Use the sudo cat command in your terminal to view the file's contents with root privileges.
   ```  
-    # Example:  
-    sudo cat passwords/password_reset_20251015_001000.txt
+  # Example:  
+  sudo cat passwords/password_reset_20251015_001000.txt
   ```
   * **To edit or delete the file:** You will need to change its ownership back to your user with ```sudo chown```.
   ```  
-    # Example:  
-    sudo chown $(id -u):$(id -g) passwords/password_reset_20251015_001000.txt
+  # Example:  
+  sudo chown $(id -u):$(id -g) passwords/password_reset_20251015_001000.txt
   ```
 
 * Email Connection Fails:  
