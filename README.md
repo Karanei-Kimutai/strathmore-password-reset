@@ -108,12 +108,12 @@ This isolates the project's dependencies from your system.
    # Activate it
   source venv/bin/activate  # Linux/Mac/WSL  
 # OR 
-     venv\Scripts\activate     # Windows   `
+     venv\Scripts\activate     # Windows   
   ```
 ### **Step 3: Install Dependencies**
 ```
    pip install --upgrade pip  
-   pip install -r requirements.txt   `
+   pip install -r requirements.txt   
 ```
 ### **Step 4: Configure Your Credentials**
 
@@ -123,7 +123,7 @@ Create a .env file from the template to securely store your credentials.
    cp .env.example .env  
 
  # Edit the file with your credentials
-   nano .env # Or your preferred text editor   `
+   nano .env # Or your preferred text editor   
 ```
 Fill in the required variables. For Gmail, you **must** use an "App Password."
 
@@ -131,7 +131,7 @@ Fill in the required variables. For Gmail, you **must** use an "App Password."
 
 Before running the main script, verify that your setup is correct:
 ```
-   python test_config.py   `
+   python test_config.py   
 ```
 If all tests pass, you are ready to proceed!
 
@@ -140,7 +140,7 @@ If all tests pass, you are ready to proceed!
 
 Ensure your virtual environment is activated, then run the main script:
 ```
-   python strathmore_password_reset.py   `
+   python strathmore_password_reset.py   
 ```
 **Alternative Method: Running with Docker**
 -------------------------------------------
@@ -160,7 +160,7 @@ Using Docker is an excellent alternative that avoids local setup and guarantees 
 
 Run the password reset anytime with a single command:
 ```
-  docker-compose up   `
+  docker-compose up   
 ```
 The new password log will be saved in the passwords/ directory.
 
