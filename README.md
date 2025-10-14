@@ -66,7 +66,7 @@ python3 \-m venv venv
 \# Activate it  
 source venv/bin/activate  \# Linux/Mac/WSL  
 \# OR  
-venv\\Scripts\\activate     \# Windows
+venv\Scripts\activate     \# Windows
 ```
 **3\. Install Dependencies**
 
