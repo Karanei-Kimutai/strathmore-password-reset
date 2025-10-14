@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  strathmore-password-reset:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: strathmore-pwd-reset
+    volumes:
+      # Mount passwords directory to persist logs
+      - ./passwords:/app/passwords
+    env_file:
+      - .env
+    environment:
+      # Override any env vars here if needed
+      - TZ=Africa/Nairobi
+    restart: "no"  # Change to "always" for scheduled runs
+    
+    # Optional: Add resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+# Optional: Add scheduling service (uncomment to use)
+# Requires docker-compose-scheduler or similar
+#   scheduler:
+#     image: mcuadros/ofelia:latest
+#     depends_on:
+#       - strathmore-password-reset
+#     command: daemon --docker
+#     volumes:
+#       - /var/run/docker.sock:/var/run/docker.sock:ro
+#     labels:
+#       ofelia.job-run.password-reset.schedule: "@weekly"
+#       ofelia.job-run.password-reset.container: "strathmore-pwd-reset"
