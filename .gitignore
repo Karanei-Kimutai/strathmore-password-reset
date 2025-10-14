@@ -1,0 +1,59 @@
+# Environment variables
+.env
+
+# Virtual environment - IMPORTANT: Never commit this!
+venv/
+env/
+ENV/
+.venv
+virtualenv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Password logs - CRITICAL: Never commit these!
+passwords/
+*.txt
+secure_logs/
+
+# Debugging files
+/tmp/
+*.png
+*.html
+email_body.*
+page_source_*
+selenium_error_*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+.dockerignore
