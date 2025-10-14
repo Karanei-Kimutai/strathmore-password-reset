@@ -9,7 +9,6 @@ Automates the password reset process for Strathmore University student portal.
 - ✅ Secure password generation (cryptographically random)
 - ✅ Automatic password reset completion
 - ✅ Comprehensive logging with timestamps
-- ✅ **Optional: Save to Google Password Manager** (see CHROME_PASSWORD_MANAGER.md)
 - ✅ WSL and Docker support
 
 ## Prerequisites
@@ -68,12 +67,6 @@ USERNAME=your_strathmore_username
 PASSWORD_LENGTH=16
 LOG_DIRECTORY=passwords
 
-# Optional: Save to Chrome Password Manager
-# Set to "true" to save password to Chrome (requires non-headless mode)
-SAVE_TO_CHROME=false
-```
-
-**For Chrome Password Manager integration**, see [CHROME_PASSWORD_MANAGER.md](CHROME_PASSWORD_MANAGER.md)
 
 ### 4. Create Passwords Directory
 
