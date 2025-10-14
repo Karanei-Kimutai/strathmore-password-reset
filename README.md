@@ -40,7 +40,7 @@ Manually resetting a Strathmore AMS password can be a repetitive and time-consum
 This repository contains multiple guides to help you get started and solve problems quickly.
 
 * **For the fastest setup**, see the **QUICKSTART.md file**  
-* **For a full list of commands and troubleshooting tips**, refer to the **CHEETSHEET.md** file
+* **For a full list of commands and troubleshooting tips**, refer to the **CHEETSHEET.md file**
 
 ## **Getting Started**
 
@@ -54,35 +54,35 @@ This repository contains multiple guides to help you get started and solve probl
 
 **1\. Clone the Repository**
 ```
-git clone https://github.com/Karanei-Kimutai/strathmore-password-reset.git
+git clone https://github.com/karanei-kimutai/strathmore-password-reset.git
 ```
 2\. Create and Activate a Virtual Environment  
 This isolates the project's dependencies from your system.  
 
 ```
-# Create the environment  
-python3 -m venv venv
+\# Create the environment  
+python3 \-m venv venv
 
-# Activate it  
-source venv/bin/activate  # Linux/Mac/WSL 
-# OR  
-venv\Scripts\activate     \# Windows
+\# Activate it  
+source venv/bin/activate  \# Linux/Mac/WSL  
+\# OR  
+venv\\Scripts\\activate     \# Windows
 ```
 **3\. Install Dependencies**
 
 ```
-pip install--upgrade pip  
-pip install -r requirements.txt
+pip install \--upgrade pip  
+pip install \-r requirements.txt
 ```
 
 4\. Configure Your Credentials  
 Create a .env file to securely store your credentials. 
 ``` 
-# Create the .env file from the example template  
+\# Create the .env file from the example template  
 cp .env.example .env
 
-# Edit the file with your credentials  
-nano .env # Or your preferred text editor
+\# Edit the file with your credentials  
+nano .env \# Or your preferred text editor
 ```
 Fill in the required variables as specified in the .env.example file. For Gmail, you **must** use an "App Password."
 
@@ -130,23 +130,29 @@ The script is logically divided into a series of phases to ensure a reliable and
 5. **Phase 4: Log Password**: After a successful reset, the new password, username, and timestamp are logged to a secure text file in the passwords/ directory for your records.
 
 ## **Project Structure**
+```
+strathmore-password-reset/
+├── strathmore_password_reset.py   # Main automation script
+├── test_config.py                 # Configuration and dependency tester
+├── requirements.txt               # Python package dependencies
+│
+├── .env                           # Your credentials (create from .env.example)
+├── .env.example                   # Template for credentials
+├── .gitignore                     # Git ignore rules for security
+│
+├── README.md                      # Full documentation (this file)
+├── QUICKSTART.md                  # Bare essentials to get started
+├── CHEATSHEET.md                  # Detailed commands and troubleshooting
+│
+├── Dockerfile                     # Configuration for Docker image
+├── docker-compose.yml             # Docker orchestration file
+│
+├── venv/                          # Virtual environment (created by you)
+└── passwords/
+    ├── password_reset_YYYYMMDD_HHMMSS.txt
+    └── password_log.txt
+```
 
-strathmore-password-reset/  
-├── strathmore\_password\_reset.py   \# Main automation script  
-├── test\_config.py                  \# Configuration and dependency tester  
-├── requirements.txt                \# Python package dependencies  
-├── .env                            \# Your credentials (create from .env.example)  
-├── .env.example                    \# Template for credentials  
-├── .gitignore                      \# Git ignore rules for security  
-├── README.md                       \# This file (full documentation)  
-├── QUICKSTART.md                   \# Bare essentials to get started  
-├── CHEATSHEET.md                   \# Detailed commands and troubleshooting  
-├── Dockerfile                      \# Configuration for Docker image  
-├── docker-compose.yml              \# Docker orchestration file  
-├── venv/                           \# Virtual environment (created by you)  
-└── passwords/                      \# Generated password logs (auto-created)  
-    ├── password\_reset\_YYYYMMDD\_HHMMSS.txt  
-    └── password\_log.txt
 
 ## **Security Best Practices**
 
@@ -155,7 +161,7 @@ strathmore-password-reset/
 * **Never Share Your .env File**: This file contains your credentials. The .gitignore file is already set up to prevent it from being committed to Git.  
 * **Use an App Password**: For your email account (especially Gmail), do not use your main password. Generate and use an app-specific password for this script.  
 * **Manage Log Files**: The script saves your new passwords in plain text. After retrieving your new password from the log file, store it in a secure password manager and **delete the log file**.  
-* **Keep Dependencies Updated**: Periodically run pip install \--upgrade \-r requirements.txt to ensure you have the latest security patches for the project's dependencies.
+* **Keep Dependencies Updated**: Periodically run ```pip install --upgrade -r requirements.txt``` to ensure you have the latest security patches for the project's dependencies.
 
 ## **Troubleshooting**
 
@@ -164,7 +170,7 @@ If you encounter any issues, your first step should be to run the configuration 
 python test_config.py
 ```
 
-For a comprehensive list of common errors and their solutions (e.g., email connection failures, Docker issues, dependency problems), please consult CHEETSHEET.md
+For a comprehensive list of common errors and their solutions (e.g., email connection failures, Docker issues, dependency problems), please consult **CHEETSHEET.md**
 
 ## **Contributing**
 
