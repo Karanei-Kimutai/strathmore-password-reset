@@ -222,12 +222,12 @@ strathmore-password-reset/
   * **Solution:** Use the sudo cat command in your terminal to view the file's contents with root privileges.
   ```  
     # Example:  
-    sudo cat passwords/password\_reset\_20251015\_001000.txt
+    sudo cat passwords/password_reset_20251015_001000.txt
   ```
   * **To edit or delete the file:** You will need to change its ownership back to your user with ```sudo chown```.
   ```  
     # Example:  
-    sudo chown $(id \-u):$(id \-g) passwords/password\_reset\_20251015\_001000.txt
+    sudo chown $(id -u):$(id -g) passwords/password_reset_20251015_001000.txt
   ```
 
 * Email Connection Fails:  
