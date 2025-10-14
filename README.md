@@ -9,6 +9,7 @@ Automates the password reset process for Strathmore University student portal.
 - ✅ Secure password generation (cryptographically random)
 - ✅ Automatic password reset completion
 - ✅ Comprehensive logging with timestamps
+- ✅ **Optional: Save to Google Password Manager** (see CHROME_PASSWORD_MANAGER.md)
 - ✅ WSL and Docker support
 
 ## Prerequisites
@@ -26,35 +27,36 @@ python3 --version
 
 ## Installation
 
-### 1. Clone and Setup
+### 1. Create Virtual Environment
 
 ```bash
-# Create project directory
-mkdir strathmore-password-reset
-cd strathmore-password-reset
+# Create virtual environment
+python3 -m venv venv
 
-# Download all files to this directory
-# (strathmore_password_reset.py, requirements.txt, setup.sh, etc.)
-
-# Make scripts executable
-chmod +x setup.sh run.sh activate.sh
-
-# Run automated setup (creates venv, installs dependencies)
-bash setup.sh
+# Activate it
+source venv/bin/activate  # Linux/Mac/WSL
+# OR
+venv\Scripts\activate     # Windows
 ```
 
-This will:
-- ✅ Create a virtual environment in `venv/`
-- ✅ Activate the virtual environment
-- ✅ Install all Python dependencies
-- ✅ Create `.env` file from template
-- ✅ Create `passwords/` directory
-
-### 2. Configure Environment
+### 2. Install Dependencies
 
 ```bash
+# Make sure venv is activated (you should see (venv) in your prompt)
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 3. Configure Environment
+
+```bash
+# Create .env file from example
+cp .env.example .env
+
 # Edit with your credentials
-nano .env
+nano .env  # Linux/Mac/WSL
+# OR
+notepad .env  # Windows
 ```
 
 **Required variables in `.env`:**
@@ -65,34 +67,38 @@ IMAP_SERVER=imap.gmail.com
 USERNAME=your_strathmore_username
 PASSWORD_LENGTH=16
 LOG_DIRECTORY=passwords
+
+# Optional: Save to Chrome Password Manager
+# Set to "true" to save password to Chrome (requires non-headless mode)
+SAVE_TO_CHROME=false
 ```
 
-### 3. Run the Script
+**For Chrome Password Manager integration**, see [CHROME_PASSWORD_MANAGER.md](CHROME_PASSWORD_MANAGER.md)
 
-**Option 1: Using the convenience script (recommended)**
+### 4. Create Passwords Directory
+
 ```bash
-bash run.sh
+mkdir -p passwords
 ```
 
-**Option 2: Manual activation**
-```bash
-# Activate virtual environment
-source venv/bin/activate
+### 5. Test Configuration
 
-# Run the script
+```bash
+# Make sure venv is activated
+python test_config.py
+```
+
+### 6. Run the Script
+
+```bash
+# Make sure venv is activated (you should see (venv) in your prompt)
 python strathmore_password_reset.py
+```
 
-# Deactivate when done
+### 7. Deactivate When Done
+
+```bash
 deactivate
-```
-
-**Option 3: Quick activation helper**
-```bash
-# Activate venv quickly
-source activate.sh
-
-# Then run
-python strathmore_password_reset.py
 ```
 
 ## Docker Setup (For Later)
@@ -116,6 +122,20 @@ docker run --rm \
 3. **Phase 3**: Extracts the "click here" link from the email
 4. **Phase 4**: Follows link, enters new secure password twice
 5. **Phase 5**: Logs password with timestamp to `passwords/` directory
+
+## Daily Usage
+
+```bash
+# 1. Activate virtual environment
+source venv/bin/activate  # Linux/Mac/WSL
+venv\Scripts\activate     # Windows
+
+# 2. Run the script
+python strathmore_password_reset.py
+
+# 3. Deactivate when done
+deactivate
+```
 
 ## Security Notes
 
@@ -189,18 +209,15 @@ sudo apt-get install -f -y
 strathmore-password-reset/
 ├── strathmore_password_reset.py   # Main script
 ├── requirements.txt                # Python dependencies
+├── test_config.py                  # Configuration tester
 ├── .env                            # Your credentials (create from .env.example)
 ├── .env.example                    # Template for credentials
-├── setup.sh                        # Automated setup script
-├── run.sh                          # Convenience script to run with venv
-├── activate.sh                     # Quick venv activation
-├── test_config.py                  # Configuration tester
+├── .gitignore                      # Git ignore rules
+├── README.md                       # This file
 ├── Dockerfile                      # Docker configuration
 ├── docker-compose.yml              # Docker orchestration
-├── README.md                       # This file
-├── .gitignore                      # Git ignore rules
-├── venv/                           # Virtual environment (created by setup.sh)
-└── passwords/                      # Generated password logs (gitignored)
+├── venv/                           # Virtual environment (you create this)
+└── passwords/                      # Generated password logs (auto-created)
     ├── password_reset_YYYYMMDD_HHMMSS.txt
     └── password_log.txt
 ```
@@ -277,11 +294,8 @@ Thumbs.db
 # Edit crontab
 crontab -e
 
-# Run every week on Sunday at 2 AM (using absolute paths)
+# Run every week on Sunday at 2 AM
 0 2 * * 0 cd /path/to/strathmore-password-reset && /path/to/strathmore-password-reset/venv/bin/python strathmore_password_reset.py
-
-# Or use the run script
-0 2 * * 0 cd /path/to/strathmore-password-reset && bash run.sh
 ```
 
 ### Using Docker Compose with Scheduler
