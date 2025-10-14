@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   strathmore-password-reset:
     build:
@@ -7,34 +5,24 @@ services:
       dockerfile: Dockerfile
     container_name: strathmore-pwd-reset
     volumes:
-      # Mount passwords directory to persist logs
+      # Mount the local passwords directory into the container to save logs
       - ./passwords:/app/passwords
     env_file:
+      # Load credentials from your local .env file
       - .env
     environment:
-      # Override any env vars here if needed
+      # This flag tells the script it's inside a Docker container
+      - RUNNING_IN_DOCKER=true
+      # Set the container's timezone
       - TZ=Africa/Nairobi
-    restart: "no"  # Change to "always" for scheduled runs
-    
-    # Optional: Add resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+    restart: "no"  # This ensures the container runs once and then stops
 
-# Optional: Add scheduling service (uncomment to use)
-# Requires docker-compose-scheduler or similar
-#   scheduler:
-#     image: mcuadros/ofelia:latest
-#     depends_on:
-#       - strathmore-password-reset
-#     command: daemon --docker
-#     volumes:
-#       - /var/run/docker.sock:/var/run/docker.sock:ro
-#     labels:
-#       ofelia.job-run.password-reset.schedule: "@weekly"
-#       ofelia.job-run.password-reset.container: "strathmore-pwd-reset"
+    # Optional: You can uncomment these lines to limit CPU and memory usage
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1'
+    #       memory: 1G
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 512M

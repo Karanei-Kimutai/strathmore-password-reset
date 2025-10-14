@@ -8,6 +8,7 @@ import subprocess
 import traceback
 import secrets
 import string
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -214,8 +215,8 @@ def request_password_reset(driver, username):
         traceback.print_exc()
 
         try:
-            screenshot_path = "/tmp/selenium_error_request.png"
-            driver.save_screenshot(screenshot_path)
+            screenshot_path = Path(tempfile.gettempdir()) / "selenium_error_request.png"
+            driver.save_screenshot(str(screenshot_path))
             print(f"[*] Screenshot saved: {screenshot_path}")
         except:
             pass
@@ -360,7 +361,7 @@ def get_reset_link_from_email(retries=10, delay=10):
                 print(f"[*] Email body length: {len(search_body)} characters")
 
                 # Save for debugging
-                debug_file = Path("/tmp/email_body.html")
+                debug_file = Path(tempfile.gettempdir()) / "email_body.html"
                 debug_file.write_text(search_body, encoding='utf-8')
                 print(f"[*] Email saved to: {debug_file}")
 
@@ -506,7 +507,6 @@ def complete_password_reset(driver, reset_link, new_password):
         
         print("[*] Waiting for success confirmation page...")
         try:
-            # ==> CHANGE 1: Broaden the success keywords to look for
             success_keywords = ['success', 'changed', 'updated', 'complete']
             xpath_conditions = [f"contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{kw}')" for kw in success_keywords]
             success_xpath = f"//*[{' or '.join(xpath_conditions)}]"
@@ -523,11 +523,10 @@ def complete_password_reset(driver, reset_link, new_password):
             return True
 
         except TimeoutException:
-            # ==> CHANGE 2 & 3: If it times out, check for errors and save a screenshot
             print("[-] Timed out waiting for the success page or message.")
             
-            screenshot_path = "/tmp/final_page_state.png"
-            driver.save_screenshot(screenshot_path)
+            screenshot_path = Path(tempfile.gettempdir()) / "final_page_state.png"
+            driver.save_screenshot(str(screenshot_path))
             print(f"[!] A screenshot of the final page has been saved to: {screenshot_path}")
             
             final_page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
@@ -542,10 +541,12 @@ def complete_password_reset(driver, reset_link, new_password):
         print(f"[-] An unexpected error occurred in Phase 3: {e}")
         traceback.print_exc()
         try:
-            driver.save_screenshot("/tmp/selenium_error_reset.png")
+            error_screenshot_path = Path(tempfile.gettempdir()) / "selenium_error_reset.png"
+            driver.save_screenshot(str(error_screenshot_path))
         except:
             pass
         return False
+
 # --- Main Workflow ---
 
 def validate_environment():
@@ -569,81 +570,60 @@ def validate_environment():
     return True
 
 def setup_chrome_driver():
-    """Sets up Chrome WebDriver with appropriate options."""
+    """Sets up Chrome WebDriver with appropriate options for Docker or local/WSL."""
     options = webdriver.ChromeOptions()
 
-    # Headless mode
+    # Standard options for headless operation
     options.add_argument('--headless=new')
     options.add_argument('--window-size=1920,1080')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-gpu')
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
 
-    # WSL-specific options
-    if is_running_in_wsl():
-        print("[*] WSL environment detected")
-
-        if not install_chrome_wsl():
-            raise Exception("Chrome installation failed")
-
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--disable-software-rasterizer')
+    # Check if running in Docker
+    is_docker = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
 
     print("[*] Setting up ChromeDriver...")
-    
-    try:
-        # Install chromedriver using webdriver-manager
-        driver_path = ChromeDriverManager().install()
-        print(f"[*] ChromeDriver installed at: {driver_path}")
-        
-        # Fix for webdriver-manager pointing to wrong file
-        # The actual chromedriver executable is in the same directory
-        driver_dir = Path(driver_path).parent
-        actual_driver = driver_dir / "chromedriver"
-        
-        if actual_driver.exists() and os.access(actual_driver, os.X_OK):
-            print(f"[*] Using chromedriver at: {actual_driver}")
-            service = ChromeService(executable_path=str(actual_driver))
-        else:
-            # Fallback to the path provided by webdriver-manager
-            print(f"[*] Using default path: {driver_path}")
-            service = ChromeService(executable_path=driver_path)
-        
-        driver = webdriver.Chrome(service=service, options=options)
-        print("[+] ChromeDriver initialized successfully")
-        
-        return driver
-        
-    except Exception as e:
-        print(f"[-] Error setting up ChromeDriver: {e}")
-        print("\n[*] Attempting manual ChromeDriver detection...")
-        
-        # Try to find chromedriver in common locations
-        common_paths = [
-            Path.home() / ".wdm" / "drivers" / "chromedriver",
-            "/usr/local/bin/chromedriver",
-            "/usr/bin/chromedriver",
-        ]
-        
-        for base_path in common_paths:
-            if base_path.exists():
-                # Look for the actual chromedriver executable
-                for item in base_path.rglob("chromedriver"):
-                    if item.is_file() and not item.name.endswith(('.txt', '.chromedriver')):
-                        try:
-                            # Check if it's executable
-                            if os.access(item, os.X_OK):
-                                print(f"[+] Found chromedriver at: {item}")
-                                service = ChromeService(executable_path=str(item))
-                                driver = webdriver.Chrome(service=service, options=options)
-                                print("[+] ChromeDriver initialized successfully")
-                                return driver
-                        except:
-                            continue
-        
-        raise Exception("Could not find valid ChromeDriver executable")
+    if is_docker:
+        print("[*] Docker environment detected. Using system ChromeDriver.")
+        try:
+            # In Docker, chromedriver is in the system PATH, so no args are needed
+            service = ChromeService()
+            driver = webdriver.Chrome(service=service, options=options)
+            print("[+] ChromeDriver initialized successfully from system path.")
+            return driver
+        except Exception as e:
+            print(f"[-] CRITICAL: Failed to initialize ChromeDriver in Docker: {e}")
+            raise Exception("ChromeDriver setup failed in Docker container.")
+    else:
+        # Fallback to WSL/local environment using webdriver-manager
+        if is_running_in_wsl():
+            print("[*] WSL environment detected")
+            if not install_chrome_wsl():
+                raise Exception("Chrome installation failed in WSL")
+
+        print("[*] Local/WSL/Windows environment detected. Using webdriver-manager.")
+        try:
+            driver_path = ChromeDriverManager().install()
+            print(f"[*] ChromeDriver path from manager: {driver_path}")
+            
+            # This logic correctly finds the actual executable
+            driver_dir = Path(driver_path).parent
+            actual_driver = driver_dir / "chromedriver"
+            
+            if actual_driver.exists() and os.access(actual_driver, os.X_OK):
+                service = ChromeService(executable_path=str(actual_driver))
+            else:
+                service = ChromeService(executable_path=driver_path)
+            
+            driver = webdriver.Chrome(service=service, options=options)
+            print("[+] ChromeDriver initialized successfully.")
+            return driver
+        except Exception as e:
+            raise Exception(f"Could not find or initialize a valid ChromeDriver executable: {e}")
 
 def main():
     """Main workflow orchestration."""
