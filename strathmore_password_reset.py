@@ -8,17 +8,16 @@ import subprocess
 import traceback
 import secrets
 import string
-import tempfile
+import tempfile # For cross-platform temporary directories
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from bs4 import BeautifulSoup
 
 # Load environment variables
@@ -117,9 +116,13 @@ def log_new_password(username, password):
 
         # Set restrictive permissions (Unix-like systems)
         if platform.system() != "Windows":
-            os.chmod(log_file, 0o600)
-            os.chmod(master_log, 0o600)
-            print("[+] File permissions set to owner-only (600)")
+            try:
+                os.chmod(log_file, 0o600)
+                os.chmod(master_log, 0o600)
+                print("[+] File permissions set to owner-only (600)")
+            except OSError as perm_err:
+                 print(f"[!] Warning: Could not set file permissions: {perm_err}")
+
 
     except Exception as e:
         print(f"[-] CRITICAL: Failed to log password: {e}")
@@ -135,34 +138,54 @@ def is_running_in_wsl():
 def install_chrome_wsl():
     """Installs Google Chrome in WSL if not already present."""
     try:
-        result = subprocess.run(['which', 'google-chrome'], capture_output=True)
+        # Check if Chrome is already installed
+        result = subprocess.run(['which', 'google-chrome'], capture_output=True, text=True)
         if result.returncode == 0:
             print("[*] Chrome is already installed in WSL.")
             return True
 
-        print("[*] Chrome not found. Installing Chrome in WSL...")
-        print("[*] This requires sudo access.")
+        print("[*] Chrome not found. Attempting to install Chrome in WSL...")
+        print("[*] This requires sudo privileges.")
 
+        # Commands to install Chrome
         commands = [
             "wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O /tmp/chrome.deb",
             "sudo dpkg -i /tmp/chrome.deb",
-            "sudo apt-get install -f -y",
+            "sudo apt-get update && sudo apt-get install -f -y", # Fix potential dependency issues
             "rm /tmp/chrome.deb"
         ]
 
         for cmd in commands:
             print(f"[*] Running: {cmd}")
-            result = subprocess.run(cmd, shell=True)
-            if result.returncode != 0 and "dpkg" in cmd:
-                print("[*] Installing dependencies...")
-                continue
+            # Run command, check=True will raise an exception if it fails
+            process = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+            print(f"[*] Output:\n{process.stdout}")
+            if process.stderr:
+                 print(f"[*] Stderr:\n{process.stderr}")
 
-        print("[+] Chrome installation complete!")
+
+        print("[+] Chrome installation appears successful!")
+
+        # Verify installation again
+        result = subprocess.run(['which', 'google-chrome'], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("[-] Verification failed: 'which google-chrome' still doesn't find it.")
+            return False
+
+        print("[+] Chrome verified.")
         return True
 
+    except subprocess.CalledProcessError as cpe:
+         print(f"[-] Command failed: {cpe.cmd}")
+         print(f"[-] Stderr: {cpe.stderr}")
+         print(f"[-] Stdout: {cpe.stdout}")
+         print("[!] Ensure you have sudo privileges and internet connectivity.")
+         return False
     except Exception as e:
-        print(f"[-] Error installing Chrome: {e}")
+        print(f"[-] An unexpected error occurred during Chrome installation: {e}")
         return False
+
+# --- Chromedriver Resolution Helper (REMOVED - Selenium Manager handles this) ---
 
 # --- Browser Automation Functions ---
 
@@ -185,11 +208,11 @@ def request_password_reset(driver, username):
         print(f"[*] Navigating to: {FRONTEND_URL}")
         driver.get(FRONTEND_URL)
 
-        wait = WebDriverWait(driver, 15)
+        wait = WebDriverWait(driver, 20) # Increased wait time
 
-        # Wait for page to load
+        # Wait for page to load - more robust wait for username field
         print("[*] Waiting for forgotten password page to load...")
-        username_input = wait.until(EC.presence_of_element_located((By.ID, "sAMAccountName")))
+        username_input = wait.until(EC.visibility_of_element_located((By.ID, "sAMAccountName")))
         print(f"[+] Page loaded: {driver.title}")
 
         # Enter username
@@ -198,30 +221,38 @@ def request_password_reset(driver, username):
         username_input.send_keys(username)
         print("[+] Username entered")
 
-        # Click Search button
+        # Click Search button - wait for it to be clickable
         print("[*] Clicking Search button...")
         search_button = wait.until(EC.element_to_be_clickable((By.ID, "submitBtn")))
         search_button.click()
         print("[+] Search button clicked")
 
-        # Wait for confirmation or next page
-        time.sleep(3)
-        print(f"[+] Current page: {driver.current_url}")
-        
+        # Optional: Add a wait here if there's a specific message to confirm after search
+        # Example: wait.until(EC.visibility_of_element_located((By.ID, "someConfirmationMessageId")))
+        # print("[+] Confirmation message appeared.")
+
+        time.sleep(3) # Keep a small delay for safety
+        print(f"[+] Current page after search: {driver.current_url}")
+
         return True
 
+    except TimeoutException:
+         print("[-] Timed out waiting for elements on the password request page.")
+         traceback.print_exc()
     except Exception as e:
         print(f"[-] Error during password reset request: {e}")
         traceback.print_exc()
 
-        try:
-            screenshot_path = Path(tempfile.gettempdir()) / "selenium_error_request.png"
-            driver.save_screenshot(str(screenshot_path))
-            print(f"[*] Screenshot saved: {screenshot_path}")
-        except:
-            pass
+    # Save screenshot on error
+    try:
+        screenshot_path = Path(tempfile.gettempdir()) / "selenium_error_request.png"
+        driver.save_screenshot(str(screenshot_path))
+        print(f"[*] Screenshot saved: {screenshot_path}")
+    except Exception as screenshot_err:
+        print(f"[!] Failed to save screenshot: {screenshot_err}")
 
-        return False
+    return False
+
 
 # --- Email Functions ---
 
@@ -242,7 +273,7 @@ def delete_previous_reset_emails():
         # Search for emails from the specific sender with the specific subject
         search_query = '(FROM "student-pss-noreply@strathmore.edu" SUBJECT "Forgotten Password Verification")'
         print(f"[*] Searching for previous emails matching sender and subject...")
-        
+
         status, messages = mail.search(None, search_query)
         if status != "OK":
             print("[-] Could not search for emails.")
@@ -255,9 +286,11 @@ def delete_previous_reset_emails():
         else:
             print(f"[*] Found {len(email_ids)} old reset email(s) to delete.")
             for mail_id in email_ids:
+                # Flag email for deletion
                 mail.store(mail_id, '+FLAGS', '\\Deleted')
-            
+
             print("[*] Expunging deleted emails...")
+            # Permanently remove flagged emails
             status, response = mail.expunge()
             if status == 'OK':
                 print("[+] Old reset emails cleared successfully.")
@@ -272,10 +305,9 @@ def delete_previous_reset_emails():
         traceback.print_exc()
         return False
 
-def get_reset_link_from_email(retries=10, delay=10):
+def get_reset_link_from_email(retries=10, delay=15): # Increased delay
     """
     Retrieves the password reset link from email inbox.
-    Looks for "Forgotten Password Verification" email from student-pss-noreply@strathmore.edu
 
     Args:
         retries: Number of attempts to find the email
@@ -297,7 +329,7 @@ def get_reset_link_from_email(retries=10, delay=10):
             mail.select("inbox")
             print("[+] Connected to inbox")
 
-            # Search for password reset email from Strathmore (preferably unseen)
+            # Search for password reset email (unseen first, then any)
             search_queries = [
                 '(UNSEEN FROM "student-pss-noreply@strathmore.edu" SUBJECT "Forgotten Password Verification")',
                 '(FROM "student-pss-noreply@strathmore.edu" SUBJECT "Forgotten Password Verification")',
@@ -307,8 +339,7 @@ def get_reset_link_from_email(retries=10, delay=10):
             for query in search_queries:
                 status, messages = mail.search(None, query)
                 if status == "OK" and messages[0]:
-                    # Get the most recent email ID
-                    email_id = messages[0].split()[-1]
+                    email_id = messages[0].split()[-1] # Get the latest matching email
                     print(f"[+] Found email (ID: {email_id.decode()}) using query: {query}")
                     break
 
@@ -318,139 +349,137 @@ def get_reset_link_from_email(retries=10, delay=10):
                 time.sleep(delay)
                 continue
 
-            # Fetch and parse email
+            # Fetch the full email content
             _, msg_data = mail.fetch(email_id, "(RFC822)")
+            mail.logout() # Logout after fetching
 
+            reset_link = None
             for response_part in msg_data:
                 if not isinstance(response_part, tuple):
                     continue
 
                 msg = email.message_from_bytes(response_part[1])
 
-                # Extract email body
+                # Extract email body (HTML preferred)
                 body = ""
                 html_body = ""
-                
                 if msg.is_multipart():
                     for part in msg.walk():
                         content_type = part.get_content_type()
-                        try:
-                            payload = part.get_payload(decode=True)
-                            if payload:
-                                decoded = payload.decode('utf-8', errors='ignore')
+                        charset = part.get_content_charset() or 'utf-8'
+                        if content_type in ["text/plain", "text/html"] and part.get_payload(decode=True):
+                            try:
+                                payload_decoded = part.get_payload(decode=True).decode(charset, errors='replace')
                                 if content_type == "text/html":
-                                    html_body = decoded
-                                elif content_type == "text/plain":
-                                    body = decoded
-                        except:
-                            continue
-                else:
+                                    html_body = payload_decoded
+                                else:
+                                    body = payload_decoded
+                            except Exception as decode_err:
+                                print(f"[!] Warning: Error decoding part ({content_type}): {decode_err}")
+                else: # Not multipart
+                    charset = msg.get_content_charset() or 'utf-8'
                     try:
                         payload = msg.get_payload(decode=True)
                         if payload:
-                            body = payload.decode('utf-8', errors='ignore')
-                    except:
-                        pass
+                             body = payload.decode(charset, errors='replace')
+                             # If content type is HTML, also store it in html_body
+                             if "text/html" in msg.get_content_type():
+                                 html_body = body
+                    except Exception as decode_err:
+                         print(f"[!] Warning: Error decoding single part body: {decode_err}")
 
-                # Prefer HTML body for link extraction
                 search_body = html_body if html_body else body
-
                 if not search_body:
-                    continue
+                    print("[!] Email body content seems empty.")
+                    continue # Try next response part if any
 
-                print(f"[*] Email body length: {len(search_body)} characters")
+                print(f"[*] Extracted email body length: {len(search_body)} characters")
 
                 # Save for debugging
-                debug_file = Path(tempfile.gettempdir()) / "email_body.html"
-                debug_file.write_text(search_body, encoding='utf-8')
-                print(f"[*] Email saved to: {debug_file}")
+                debug_file = Path(tempfile.gettempdir()) / f"email_body_{email_id.decode()}.html"
+                try:
+                    debug_file.write_text(search_body, encoding='utf-8', errors='replace')
+                    print(f"[*] Email content saved for debugging: {debug_file}")
+                except Exception as save_err:
+                    print(f"[!] Could not save email content: {save_err}")
 
-                # Extract reset link - look for "click here" anchor tag
-                reset_link = None
 
-                # Try parsing HTML first
+                # --- Link Extraction Logic ---
+                # Try BeautifulSoup first for HTML
                 if html_body:
                     try:
                         soup = BeautifulSoup(html_body, 'html.parser')
-                        # Find all links
                         for link in soup.find_all('a', href=True):
-                            link_text = link.get_text().strip().lower()
                             href = link['href']
-                            
-                            # Look for "click here" or password reset related links
-                            if 'click here' in link_text or 'reset' in link_text.lower():
+                            # UPDATED: Look for the new pattern OR the old one just in case
+                            if ('su-sso.strathmore.edu/student-pss/public/verifytoken' in href or
+                                'su-sso.strathmore.edu/student-pss/public/forgottenpassword/' in href): # Added check for new pattern
                                 reset_link = href
-                                print(f"[+] Found link via 'click here': {reset_link[:80]}...")
-                                break
-                            
-                            # Also check if URL contains password reset patterns
-                            if 'strathmore.edu' in href and ('password' in href.lower() or 'token' in href.lower()):
-                                reset_link = href
-                                print(f"[+] Found Strathmore password link: {reset_link[:80]}...")
-                                break
-                    except Exception as e:
-                        print(f"[!] HTML parsing failed: {e}")
+                                print(f"[+] Found reset link via BeautifulSoup: {reset_link[:80]}...")
+                                break # Found the link
+                    except Exception as soup_err:
+                        print(f"[!] Error parsing HTML with BeautifulSoup: {soup_err}")
 
-                # Fallback to regex patterns
+                # Fallback to Regex if BS fails or no link found
                 if not reset_link:
+                    # UPDATED: Add regex for the new pattern and keep old one
                     patterns = [
-                        # Look for click here anchor pattern
-                        r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>.*?click here.*?</a>',
-                        # Strathmore specific URLs
-                        r'https?://su-sso\.strathmore\.edu[^\s"<>]+',
-                        r'https?://[^\s"<>]*strathmore\.edu[^\s"<>]*password[^\s"<>]*',
-                        # Generic password reset patterns
-                        r'https?://[^\s"<>]+/student-pss[^\s"<>]+',
+                         r'(https?://su-sso\.strathmore\.edu/student-pss/public/forgottenpassword/[^\s"\'<>]+)', # New pattern observed
+                         r'(https?://su-sso\.strathmore\.edu/student-pss/public/verifytoken/[^\s"\'<>]+)'  # Original pattern
                     ]
-
-                    for pattern_idx, pattern in enumerate(patterns, 1):
+                    for pattern in patterns:
                         matches = re.findall(pattern, search_body, re.IGNORECASE)
-
                         if matches:
-                            print(f"[*] Pattern {pattern_idx} found {len(matches)} link(s)")
-                            for match in matches:
-                                link = match.rstrip('.,;)\'">')
-                                
-                                # Validate it's a password reset link
-                                if 'strathmore.edu' in link:
-                                    reset_link = link
-                                    print(f"[+] Extracted reset link: {reset_link[:80]}...")
-                                    break
-                            
-                        if reset_link:
-                            break
+                            reset_link = matches[0].rstrip('.,;)\'">') # Get the first match and clean it
+                            print(f"[+] Found reset link via Regex: {reset_link[:80]}...")
+                            break # Exit pattern loop once found
+
+                    if not reset_link:
+                        print("[!] No reset link found using specific patterns.")
+                        # Optional: Log all found URLs for deeper inspection if needed
+                        all_urls = re.findall(r'https?://[^\s"\'<>]+', search_body)
+                        if all_urls:
+                             print("[!] All URLs found in body (for debugging):")
+                             for i, url in enumerate(all_urls[:5]): # Show first 5
+                                 print(f"    - {url[:100]}")
+
 
                 if reset_link:
-                    # Mark email as read
-                    mail.store(email_id, '+FLAGS', '\\Seen')
-                    mail.logout()
-                    return reset_link
+                    # Mark email as read (Connect again briefly)
+                    try:
+                        mail_marker = imaplib.IMAP4_SSL(IMAP_SERVER)
+                        mail_marker.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                        mail_marker.select("inbox")
+                        mail_marker.store(email_id, '+FLAGS', '\\Seen')
+                        mail_marker.logout()
+                        print("[+] Marked email as read.")
+                    except Exception as mark_err:
+                        print(f"[!] Warning: Could not mark email as read: {mark_err}")
 
-                # If we reach here, show all found URLs for debugging
-                print("[!] No reset link found. All URLs in email:")
-                all_urls = re.findall(r'https?://[^\s"<>]+', search_body)
-                for idx, url in enumerate(all_urls[:10], 1):
-                    print(f"    {idx}. {url[:100]}")
+                    return reset_link # Success!
 
-                # Mark as read to avoid reprocessing
-                mail.store(email_id, '+FLAGS', '\\Seen')
+            # If loop finishes without finding link in any part
+            print("[-] Reset link not found in fetched email content.")
 
-            mail.logout()
-
+        except imaplib.IMAP4.error as imap_err:
+             print(f"[-] IMAP Error: {imap_err}")
+             print("[!] Check IMAP settings, credentials, and App Password status.")
+             # No retry on critical IMAP errors
+             return None
         except Exception as e:
-            print(f"[-] Error checking email: {e}")
+            print(f"[-] Unexpected error checking email: {e}")
             traceback.print_exc()
 
-        print(f"[*] Waiting {delay}s before retry...")
+        # If email was not found or link extraction failed, wait before retrying
+        print(f"[*] Waiting {delay}s before next email check...")
         time.sleep(delay)
 
-    print("[-] Failed to retrieve reset link after all attempts")
+    print("[-] Failed to retrieve reset link after all attempts.")
     return None
 
 def complete_password_reset(driver, reset_link, new_password):
     """
     Navigates to the reset link and sets the new password.
-    Detects success by monitoring page transitions and checking for errors.
 
     Args:
         driver: Selenium WebDriver instance
@@ -460,92 +489,132 @@ def complete_password_reset(driver, reset_link, new_password):
     Returns:
         bool: True if successful, False otherwise
     """
+    screenshot_saved = False # Flag to avoid saving multiple screenshots for one error
     try:
         print("\n" + "=" * 60)
         print("PHASE 3: COMPLETING PASSWORD RESET")
         print("=" * 60)
 
-        print(f"[*] Navigating to reset link...")
+        print(f"[*] Navigating to reset link: {reset_link[:80]}...")
         driver.get(reset_link)
 
-        wait = WebDriverWait(driver, 15)
-        time.sleep(2)  # Allow page time for any redirects
-
-        if driver.current_url == FRONTEND_URL:
-            print("[-] CRITICAL: The reset link immediately redirected back to the start page.")
-            print("[!] This likely means the token in the URL was invalid or expired.")
-            return False
+        wait = WebDriverWait(driver, 25) # Slightly longer wait
+        time.sleep(3)  # Allow page to fully render after navigation
 
         initial_url = driver.current_url
-        print(f"[*] Successfully landed on reset page: {initial_url}")
+        print(f"[*] Landed on page: {initial_url}")
         print(f"[*] Page title: {driver.title}")
 
-        print("[*] Looking for password input fields...")
+        # Check for immediate signs of invalid/expired token on the page
+        page_source_lower = driver.page_source.lower()
+        if "invalid token" in page_source_lower or "link has expired" in page_source_lower or "token is required" in page_source_lower:
+             print("[-] Error message found on page: Link appears invalid, expired, or token missing.")
+             return False
+
+        print("[*] Looking for password input fields using confirmed names...")
+        password1_field = None
+        password2_field = None
         try:
-            password1_field = wait.until(EC.presence_of_element_located((By.NAME, "password1")))
-            print("[+] Found 'New Password' field.")
-            password2_field = driver.find_element(By.NAME, "password2")
-            print("[+] Found 'Confirm Password' field.")
+            # Using the confirmed names from the HTML structure
+            print("[*] Trying locators: name='password1', name='password2'")
+            password1_field = wait.until(EC.visibility_of_element_located((By.NAME, "password1")))
+            password2_field = wait.until(EC.visibility_of_element_located((By.NAME, "password2")))
+            print("[+] Found fields by name='password1' and 'password2'.")
+
         except (TimeoutException, NoSuchElementException):
-            print("[-] Could not find password input fields on the page.")
+            print("[-] Could not find password input fields using names 'password1' and 'password2'.")
             return False
+
+
+        # Ensure fields are interactable before sending keys
+        print("[*] Ensuring fields are interactable...")
+        wait.until(EC.element_to_be_clickable(password1_field))
+        wait.until(EC.element_to_be_clickable(password2_field))
 
         print("[*] Entering new password...")
         password1_field.clear()
         password1_field.send_keys(new_password)
-        print("[+] Password entered in first field")
+        print("[+] Password entered.")
 
         print("[*] Confirming password...")
         password2_field.clear()
         password2_field.send_keys(new_password)
-        print("[+] Password entered in confirmation field")
+        print("[+] Password confirmed.")
 
         print("[*] Submitting password reset...")
         submit_button = wait.until(EC.element_to_be_clickable((By.ID, "password_button")))
         submit_button.click()
-        print("[+] Change Password button clicked")
-        
-        print("[*] Waiting for success confirmation page...")
-        try:
-            success_keywords = ['success', 'changed', 'updated', 'complete']
-            xpath_conditions = [f"contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{kw}')" for kw in success_keywords]
-            success_xpath = f"//*[{' or '.join(xpath_conditions)}]"
+        print("[+] Submit button clicked.")
 
-            wait.until(
-                EC.any_of(
-                    EC.url_changes(initial_url),
-                    EC.presence_of_element_located((By.XPATH, success_xpath))
-                )
-            )
-            
-            time.sleep(2)
-            print("[+] Confirmation detected! Password reset was successful.")
-            return True
+        # --- ADDED DELAY ---
+        print("[*] Waiting 2 seconds for server processing...")
+        time.sleep(2)
+        # --- END ADDED DELAY ---
+
+        # --- UPDATED SUCCESS CONFIRMATION ---
+        print("[*] Waiting up to 20s for success page URL and content...")
+        try:
+            # 1. Wait specifically for the URL to contain 'processAction=complete'
+            wait.until(EC.url_contains("processAction=complete"))
+            print("[+] Success URL detected.")
+
+            # 2. Wait for the specific success text to be visible
+            success_text = "The password has been changed successfully."
+            success_element = wait.until(EC.visibility_of_element_located((By.XPATH, f"//*[contains(text(), '{success_text}')]")))
+            print(f"[+] Success message confirmed: '{success_element.text}'")
+
+            return True # Both conditions met
 
         except TimeoutException:
-            print("[-] Timed out waiting for the success page or message.")
-            
-            screenshot_path = Path(tempfile.gettempdir()) / "final_page_state.png"
-            driver.save_screenshot(str(screenshot_path))
-            print(f"[!] A screenshot of the final page has been saved to: {screenshot_path}")
-            
-            final_page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
-            error_keywords = ['error', 'fail', 'unable', 'requirement', 'invalid']
-            for keyword in error_keywords:
-                if keyword in final_page_text:
-                    print(f"[!] Found potential error keyword on final page: '{keyword}'")
-            
-            return False
+            # Timeout - check for specific error messages before failing
+            print("[-] Timed out waiting for success URL or success message.")
+            page_source_lower = driver.page_source.lower()
+            error_keywords = ['error', 'fail', 'unable', 'invalid token', 'link has expired', 'did not match', 'problem', 'incorrect', 'requirement']
+            found_errors = [kw for kw in error_keywords if kw in page_source_lower]
+
+            if found_errors:
+                print(f"[!] Found error keyword(s) on final page: {', '.join(found_errors)}")
+                # Attempt to capture specific error message
+                try:
+                    error_elements = driver.find_elements(By.CSS_SELECTOR, ".error, .message, #message, [class*='error'], [id*='error']")
+                    if error_elements:
+                        for elem in error_elements:
+                             if elem.is_displayed() and elem.text.strip():
+                                 print(f"[!] Specific Error Message Found: '{elem.text.strip()}'")
+                                 break
+                    else:
+                         print("[!] Could not find specific error message element, but keywords were present.")
+                except Exception as find_err:
+                     print(f"[!] Tried to find specific error message element but failed: {find_err}")
+
+                screenshot_saved = True
+                error_screenshot_path = Path(tempfile.gettempdir()) / "selenium_error_final_page.png"
+                driver.save_screenshot(str(error_screenshot_path))
+                print(f"[*] Screenshot of error page saved: {error_screenshot_path}")
+                return False
+            else:
+                # No clear success, no clear error
+                print("[!] Did not reach success page/message and no clear error message found after timeout. Please check the final screenshot.")
+                screenshot_saved = True
+                timeout_screenshot_path = Path(tempfile.gettempdir()) / "selenium_timeout_final_page.png"
+                driver.save_screenshot(str(timeout_screenshot_path))
+                print(f"[*] Screenshot of timeout page saved: {timeout_screenshot_path}")
+                return False
+        # --- END UPDATED SUCCESS CONFIRMATION ---
 
     except Exception as e:
         print(f"[-] An unexpected error occurred in Phase 3: {e}")
         traceback.print_exc()
-        try:
-            error_screenshot_path = Path(tempfile.gettempdir()) / "selenium_error_reset.png"
-            driver.save_screenshot(str(error_screenshot_path))
-        except:
-            pass
-        return False
+        # Ensure screenshot is saved even on unexpected errors, if not already saved
+        if not screenshot_saved and 'driver' in locals() and driver:
+             try:
+                 error_screenshot_path = Path(tempfile.gettempdir()) / "selenium_error_unexpected.png"
+                 driver.save_screenshot(str(error_screenshot_path))
+                 print(f"[*] Screenshot saved due to unexpected error: {error_screenshot_path}")
+             except Exception as screenshot_err:
+                 print(f"[!] Failed to save unexpected error screenshot: {screenshot_err}")
+        return False # Return False if any exception occurred
+
 
 # --- Main Workflow ---
 
@@ -567,10 +636,19 @@ def validate_environment():
         print("\n[*] Please set these in your .env file")
         return False
 
+    # Basic email format check
+    if not EMAIL_ADDRESS or "@" not in EMAIL_ADDRESS:
+        print(f"[-] Invalid or missing EMAIL_ADDRESS: {EMAIL_ADDRESS}")
+        return False
+    if not USERNAME:
+         print(f"[-] Missing USERNAME.")
+         return False
+
     return True
 
 def setup_chrome_driver():
-    """Sets up Chrome WebDriver with appropriate options for Docker or local/WSL."""
+    """Sets up Chrome WebDriver using Selenium Manager for local/WSL
+       or explicit path for Docker."""
     options = webdriver.ChromeOptions()
 
     # Standard options for headless operation
@@ -582,48 +660,70 @@ def setup_chrome_driver():
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
+    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
 
     # Check if running in Docker
     is_docker = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
 
     print("[*] Setting up ChromeDriver...")
     if is_docker:
-        print("[*] Docker environment detected. Using system ChromeDriver.")
+        print("[*] Docker environment detected. Using explicit system ChromeDriver path.")
         try:
-            # In Docker, chromedriver is in the system PATH, so no args are needed
-            service = ChromeService()
+            # Explicitly point to the chromedriver installed by the Dockerfile
+            driver_path_docker = "/usr/local/bin/chromedriver-linux64/chromedriver"
+            if not Path(driver_path_docker).exists():
+                 driver_path_docker = "/usr/local/bin/chromedriver" # Fallback
+
+            if not Path(driver_path_docker).exists() or not os.access(driver_path_docker, os.X_OK):
+                 raise FileNotFoundError("Chromedriver executable not found or not executable at expected Docker paths.")
+
+            print(f"[*] Using driver path: {driver_path_docker}")
+            service = ChromeService(executable_path=driver_path_docker)
             driver = webdriver.Chrome(service=service, options=options)
             print("[+] ChromeDriver initialized successfully from system path.")
             return driver
         except Exception as e:
             print(f"[-] CRITICAL: Failed to initialize ChromeDriver in Docker: {e}")
+            traceback.print_exc()
             raise Exception("ChromeDriver setup failed in Docker container.")
     else:
-        # Fallback to WSL/local environment using webdriver-manager
-        if is_running_in_wsl():
-            print("[*] WSL environment detected")
-            if not install_chrome_wsl():
-                raise Exception("Chrome installation failed in WSL")
+        # For local/WSL runs, rely on Selenium Manager
+        print("[*] Local/WSL/Windows environment detected. Using Selenium Manager.")
 
-        print("[*] Local/WSL/Windows environment detected. Using webdriver-manager.")
+        # Optional: Check for Chrome in WSL and attempt install if missing
+        if is_running_in_wsl():
+             print("[*] WSL environment detected")
+             # Check if chrome exists, but don't fail immediately if install fails
+             try:
+                 subprocess.run(['which', 'google-chrome'], check=True, capture_output=True)
+                 print("[*] Chrome is already installed in WSL.")
+             except (subprocess.CalledProcessError, FileNotFoundError):
+                 print("[!] Google Chrome not found in WSL path.")
+                 # Attempt install, but proceed even if it fails - Selenium Manager might still work
+                 install_chrome_wsl()
+
+
         try:
-            driver_path = ChromeDriverManager().install()
-            print(f"[*] ChromeDriver path from manager: {driver_path}")
-            
-            # This logic correctly finds the actual executable
-            driver_dir = Path(driver_path).parent
-            actual_driver = driver_dir / "chromedriver"
-            
-            if actual_driver.exists() and os.access(actual_driver, os.X_OK):
-                service = ChromeService(executable_path=str(actual_driver))
-            else:
-                service = ChromeService(executable_path=driver_path)
-            
+            # Initialize ChromeService WITHOUT executable_path.
+            # Selenium Manager will automatically find/download the driver.
+            print("[*] Initializing ChromeService (Selenium Manager will handle driver)...")
+            service = ChromeService()
             driver = webdriver.Chrome(service=service, options=options)
-            print("[+] ChromeDriver initialized successfully.")
+            print("[+] ChromeDriver initialized successfully via Selenium Manager.")
             return driver
+        except WebDriverException as wde:
+             # Catch specific Selenium errors, often version mismatch or driver not found
+             print(f"[-] Selenium WebDriverException during setup: {wde}")
+             print("[!] This might indicate Selenium Manager failed to find/download the correct driver.")
+             print("[!] Ensure Google Chrome is installed and accessible in your PATH.")
+             print("[!] Or, try manually installing chromedriver and adding it to your PATH.")
+             traceback.print_exc()
+             raise Exception(f"Failed to initialize ChromeDriver using Selenium Manager: {wde}")
         except Exception as e:
-            raise Exception(f"Could not find or initialize a valid ChromeDriver executable: {e}")
+            print(f"[-] Unexpected error during Selenium Manager setup: {e}")
+            traceback.print_exc()
+            raise Exception(f"Could not initialize ChromeDriver using Selenium Manager: {e}")
+
 
 def main():
     """Main workflow orchestration."""
@@ -631,18 +731,21 @@ def main():
     print("STRATHMORE AUTOMATED PASSWORD RESET")
     print("=" * 60)
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"OS: {platform.system()}")
     print("=" * 60 + "\n")
 
-    # Validate environment
+    # Validate environment first
     if not validate_environment():
-        return
+        return 1 # Indicate failure
 
-    # Phase 0: Delete any old password reset emails to ensure we get the new one
+    # Phase 0: Clean up emails
     if not delete_previous_reset_emails():
-        print("[-] Halting process due to email cleanup failure.")
-        return
+        # Log a warning but continue? Or halt? Let's halt for safety.
+        print("[-] Halting process due to email cleanup failure. Old links might interfere.")
+        return 1 # Indicate failure
 
     driver = None
+    exit_code = 0 # Assume success unless an error occurs
 
     try:
         # Setup browser
@@ -662,11 +765,11 @@ def main():
         new_password = generate_secure_password()
         print(f"[+] Generated password (length: {len(new_password)})")
 
-        # Phase 4: Complete password reset
+        # Phase 4: Complete password reset using the retrieved link
         if not complete_password_reset(driver, reset_link, new_password):
             raise Exception("Failed to complete password reset")
 
-        # Phase 5: Log the new password
+        # Phase 5: Log the new password securely
         log_new_password(USERNAME, new_password)
 
         # Success summary
@@ -675,23 +778,34 @@ def main():
         print("=" * 60)
         print(f"Username: {USERNAME}")
         print(f"Password: {new_password}")
-        print(f"Logged: {LOG_DIRECTORY}/")
+        print(f"Logged to files in: {LOG_DIRECTORY}/")
         print("=" * 60)
-        print("\n[!] IMPORTANT: Save this password securely!")
+        print("\n[!] IMPORTANT: Retrieve password from log, store securely, and delete log file.")
 
     except Exception as e:
         print("\n" + "=" * 60)
         print("✗ WORKFLOW FAILED")
         print("=" * 60)
         print(f"Error: {e}")
-        traceback.print_exc()
+        # Only print traceback if it's not a simple Exception we raised
+        if not isinstance(e, Exception) or traceback.format_exc().strip() != f"Exception: {e}":
+             traceback.print_exc()
+        exit_code = 1 # Indicate failure
 
     finally:
         if driver:
-            driver.quit()
-            print("\n[*] Browser closed")
+            try:
+                driver.quit()
+                print("\n[*] Browser closed")
+            except Exception as quit_err:
+                 print(f"[!] Error closing browser: {quit_err}")
 
-        print(f"[*] Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+        print(f"[*] Script finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        # Exit with the determined code
+        return exit_code
 
 if __name__ == "__main__":
-    main()
+    status = main()
+    exit(status)
+
