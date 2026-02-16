@@ -2,6 +2,7 @@ import os
 import time
 import imaplib
 import email
+import smtplib
 import re
 import platform
 import subprocess
@@ -9,8 +10,10 @@ import traceback
 import secrets
 import string
 import tempfile # For cross-platform temporary directories
+import ssl
 from datetime import datetime
 from pathlib import Path
+from email.message import EmailMessage
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -31,6 +34,9 @@ USERNAME = os.getenv("USERNAME")  # Strathmore username
 FRONTEND_URL = "https://su-sso.strathmore.edu/student-pss/public/forgottenpassword"
 PASSWORD_LENGTH = int(os.getenv("PASSWORD_LENGTH", "16"))
 LOG_DIRECTORY = os.getenv("LOG_DIRECTORY", "passwords")
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+NOTIFICATION_EMAIL = os.getenv("NOTIFICATION_EMAIL", EMAIL_ADDRESS)
 
 # --- Password Generation and Logging ---
 
@@ -128,6 +134,51 @@ def log_new_password(username, password):
         print(f"[-] CRITICAL: Failed to log password: {e}")
         print(f"[!] Password was: {password}")
         print("[!] SAVE THIS PASSWORD MANUALLY!")
+
+def send_password_email(username, password):
+    """
+    Sends the new password to the configured notification email address.
+
+    Args:
+        username: User's username
+        password: The new password to send
+
+    Returns:
+        bool: True if email sent successfully, False otherwise
+    """
+    if not NOTIFICATION_EMAIL:
+        print("[!] Notification email is not configured. Skipping password email.")
+        return False
+
+    try:
+        print("\n" + "=" * 60)
+        print("PHASE 6: SENDING PASSWORD NOTIFICATION EMAIL")
+        print("=" * 60)
+        print(f"[*] Sending password email to: {NOTIFICATION_EMAIL}")
+
+        message = EmailMessage()
+        message["Subject"] = f"Strathmore Password Reset - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        message["From"] = EMAIL_ADDRESS
+        message["To"] = NOTIFICATION_EMAIL
+        message.set_content(
+            "Your Strathmore password reset completed successfully.\n\n"
+            f"Username: {username}\n"
+            f"New Password: {password}\n\n"
+            "Store this password securely and delete this email after use."
+        )
+
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(message)
+
+        print("[+] Password notification email sent successfully.")
+        return True
+    except Exception as e:
+        print(f"[!] Warning: Failed to send password notification email: {e}")
+        return False
 
 # --- Environment Detection ---
 
@@ -772,6 +823,9 @@ def main():
         # Phase 5: Log the new password securely
         log_new_password(USERNAME, new_password)
 
+        # Phase 6: Send password notification email
+        email_sent = send_password_email(USERNAME, new_password)
+
         # Success summary
         print("\n" + "=" * 60)
         print("✓ PASSWORD RESET COMPLETED SUCCESSFULLY")
@@ -779,6 +833,7 @@ def main():
         print(f"Username: {USERNAME}")
         print(f"Password: {new_password}")
         print(f"Logged to files in: {LOG_DIRECTORY}/")
+        print(f"Email sent to: {NOTIFICATION_EMAIL if email_sent else 'FAILED'}")
         print("=" * 60)
         print("\n[!] IMPORTANT: Retrieve password from log, store securely, and delete log file.")
 
@@ -808,4 +863,3 @@ def main():
 if __name__ == "__main__":
     status = main()
     exit(status)
-
