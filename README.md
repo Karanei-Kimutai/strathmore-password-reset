@@ -1,7 +1,7 @@
 **Strathmore Password Reset Automation**
 ========================================
 
-A complete, automated solution for resetting passwords on the Strathmore University student AMS portal. This script handles the entire workflow—from initiating the request to securely logging the new password—with robust error handling, comprehensive documentation, and full cross-platform support for **Windows, macOS, WSL, and Docker**.
+A complete, automated solution for resetting passwords on the Strathmore University student AMS portal. This script handles the entire workflow—from initiating the request to securely logging and emailing the new password—with robust error handling, comprehensive documentation, and full cross-platform support for **Windows, macOS, WSL, and Docker**.
 
 **Table of Contents**
 ---------------------
@@ -62,6 +62,8 @@ Manually resetting a Strathmore AMS password is a repetitive task. This project 
 *   ✅ **Secure by Design**: Generates cryptographically strong passwords, uses a .env file for secrets, and includes a .gitignore to prevent accidental commits of sensitive data.
     
 *   ✅ **Intelligent Email Handling**: Automatically cleans up old reset emails and robustly parses the new link from the email body.
+
+*   ✅ **Password Notification Email**: Sends the generated password to your configured notification email address after a successful reset.
     
 *   ✅ **Pre-flight Configuration Tester**: A built-in script (test\_config.py) validates your setup before running the main application.
     
@@ -127,6 +129,11 @@ Create a .env file from the template to securely store your credentials.
 ```
 Fill in the required variables. For Gmail, you **must** use an "App Password."
 
+For email notifications, set:
+* `SMTP_SERVER` (example: `smtp.gmail.com`)
+* `SMTP_PORT` (example: `587`)
+* `NOTIFICATION_EMAIL` (where the new password should be sent)
+
 ### **Step 5: Test Your Configuration**
 
 Before running the main script, verify that your setup is correct:
@@ -166,7 +173,7 @@ The new password log will be saved in the passwords/ directory.
 
  **Note:** See the troubleshooting section below on how to view these files.
 
-**How It Works: The 5 Phases of Automation**
+**How It Works: The 6 Phases of Automation**
 --------------------------------------------
 
 1.  **Phase 0: Cleanup**: Deletes old, unused password reset emails from your inbox.
@@ -178,6 +185,8 @@ The new password log will be saved in the passwords/ directory.
 4.  **Phase 3: Complete Reset**: It navigates to the link and submits a new, securely generated password.
     
 5.  **Phase 4: Log Password**: The new password is logged to a secure text file.
+
+6.  **Phase 5: Send Notification Email**: The new password is emailed to your configured `NOTIFICATION_EMAIL`.
     
 
 **Project Structure**
@@ -232,6 +241,9 @@ strathmore-password-reset/
 
 * Email Connection Fails:  
   Run ```python test_config.py```. This is almost always caused by using a regular email password instead of an App Password. 
+
+* Password Notification Email Fails:  
+  Ensure `SMTP_SERVER`, `SMTP_PORT`, and `NOTIFICATION_EMAIL` are set in `.env`. For Gmail, use an App Password in `EMAIL_PASSWORD`.
 
 * "No module named X" Error:  
   Your virtual environment is not activated. Activate it and run ```pip install -r requirements.txt```.

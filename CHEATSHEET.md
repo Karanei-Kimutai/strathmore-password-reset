@@ -116,6 +116,9 @@ pip install -r requirements.txt
 EMAIL_ADDRESS=your.email@strathmore.edu
 EMAIL_PASSWORD=your_app_password_here
 IMAP_SERVER=imap.gmail.com
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+NOTIFICATION_EMAIL=your.email@strathmore.edu
 
 # Strathmore credentials
 USERNAME=your_strathmore_username
@@ -215,6 +218,7 @@ python test_config.py
 # 2. Enable IMAP in Gmail settings
 # 3. Check IMAP_SERVER is correct (imap.gmail.com for Gmail)
 # 4. Verify EMAIL_ADDRESS and EMAIL_PASSWORD in .env
+# 5. For notifications, verify SMTP_SERVER, SMTP_PORT, and NOTIFICATION_EMAIL
 ```
 
 ### Chrome Not Found (WSL)

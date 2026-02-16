@@ -37,6 +37,9 @@ Add your credentials:
 EMAIL_ADDRESS=your.email@strathmore.edu
 EMAIL_PASSWORD=your_app_password
 IMAP_SERVER=imap.gmail.com
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+NOTIFICATION_EMAIL=your.email@strathmore.edu
 USERNAME=your_strathmore_username
 PASSWORD_LENGTH=16
 LOG_DIRECTORY=passwords
@@ -108,6 +111,7 @@ If using Gmail:
 3. Go to: https://myaccount.google.com/apppasswords
 4. Create app password for "Mail"
 5. Use that password in `.env` (not your regular Gmail password)
+6. Keep `SMTP_SERVER=smtp.gmail.com` and `SMTP_PORT=587` for notifications
 
 ---
 
@@ -146,6 +150,10 @@ python -m venv venv
 python test_config.py
 # Check the output for specific errors
 ```
+
+**Password notification email fails**
+- Check `SMTP_SERVER`, `SMTP_PORT`, and `NOTIFICATION_EMAIL` in `.env`
+- Confirm `EMAIL_PASSWORD` is an app password (for Gmail)
 
 **Need help?**
 - Check `README.md` for detailed docs
