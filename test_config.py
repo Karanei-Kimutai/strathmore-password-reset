@@ -13,6 +13,8 @@ Or:
 
 import os
 import imaplib
+import smtplib
+import ssl
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -31,6 +33,11 @@ def test_env_variables():
         "IMAP_SERVER": os.getenv("IMAP_SERVER"),
         "USERNAME": os.getenv("USERNAME"),
     }
+    optional_vars = {
+        "SMTP_SERVER": os.getenv("SMTP_SERVER", "smtp.gmail.com"),
+        "SMTP_PORT": os.getenv("SMTP_PORT", "587"),
+        "NOTIFICATION_EMAIL": os.getenv("NOTIFICATION_EMAIL", os.getenv("EMAIL_ADDRESS")),
+    }
     
     all_set = True
     for var_name, var_value in required_vars.items():
@@ -44,13 +51,20 @@ def test_env_variables():
         else:
             print(f"[-] {var_name}: NOT SET")
             all_set = False
+
+    print("\n[*] Optional notification settings:")
+    for var_name, var_value in optional_vars.items():
+        if var_value:
+            print(f"[+] {var_name}: {var_value}")
+        else:
+            print(f"[!] {var_name}: NOT SET (will use script defaults where applicable)")
     
     return all_set
 
 def test_email_connection():
     """Test IMAP connection to email server."""
     print("\n" + "=" * 60)
-    print("Testing Email Connection")
+    print("Testing IMAP Email Connection")
     print("=" * 60)
     
     email_address = os.getenv("EMAIL_ADDRESS")
@@ -92,6 +106,50 @@ def test_email_connection():
         return False
     except Exception as e:
         print(f"[-] Connection failed: {e}")
+        return False
+
+def test_notification_email_connection():
+    """Test SMTP connection/login for password notification email."""
+    print("\n" + "=" * 60)
+    print("Testing SMTP Notification Connection")
+    print("=" * 60)
+
+    email_address = os.getenv("EMAIL_ADDRESS")
+    email_password = os.getenv("EMAIL_PASSWORD")
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    notification_email = os.getenv("NOTIFICATION_EMAIL", email_address)
+
+    if not email_address or not email_password:
+        print("[-] Email credentials not set in .env file")
+        return False
+
+    if not notification_email:
+        print("[-] NOTIFICATION_EMAIL could not be resolved")
+        return False
+
+    try:
+        print(f"[*] Connecting to SMTP server {smtp_server}:{smtp_port}...")
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+
+            print(f"[*] Logging in as {email_address}...")
+            server.login(email_address, email_password)
+
+        print(f"[+] SMTP login test PASSED (notification target: {notification_email})")
+        print("[*] No email was sent during this test.")
+        return True
+    except smtplib.SMTPException as e:
+        print(f"[-] SMTP Error: {e}")
+        print("\n[!] Common issues:")
+        print("    - Wrong email/app password")
+        print("    - Wrong SMTP server/port")
+        print("    - Account requires App Password (Gmail)")
+        return False
+    except Exception as e:
+        print(f"[-] SMTP connection failed: {e}")
         return False
 
 def test_directories():
@@ -152,7 +210,8 @@ def main():
         "Environment Variables": test_env_variables(),
         "Python Dependencies": test_imports(),
         "Directories": test_directories(),
-        "Email Connection": test_email_connection(),
+        "IMAP Email Connection": test_email_connection(),
+        "SMTP Notification Connection": test_notification_email_connection(),
     }
     
     print("\n" + "=" * 60)
@@ -178,6 +237,7 @@ def main():
         print("  - Run: pip install -r requirements.txt")
         print("  - Enable IMAP in your email settings")
         print("  - Use App Password for Gmail")
+        print("  - Set SMTP_SERVER/SMTP_PORT correctly for notifications")
     print("=" * 60 + "\n")
     
     return 0 if all_passed else 1
