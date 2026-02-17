@@ -18,10 +18,6 @@ from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService
-try:
-    from selenium.webdriver.common.selenium_manager import SeleniumManager
-except ImportError:
-    SeleniumManager = None
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
@@ -761,25 +757,34 @@ def setup_chrome_driver():
         try:
             service = None
 
-            # On Windows, explicitly resolve the driver path through Selenium Manager.
-            # This avoids stale chromedriver binaries in PATH overriding the resolved version.
-            if platform.system() == "Windows" and SeleniumManager is not None:
-                print("[*] Windows detected. Resolving ChromeDriver path via Selenium Manager...")
-                manager = SeleniumManager()
-                resolved_paths = manager.binary_paths(["--browser", "chrome"])
-                resolved_driver_path = resolved_paths.get("driver_path")
-                resolved_browser_path = resolved_paths.get("browser_path")
+            # On Windows, remove PATH entries that already contain chromedriver.exe.
+            # This prevents stale global drivers (e.g. C:\Windows\chromedriver.exe)
+            # from overriding the version selected by Selenium Manager.
+            if platform.system() == "Windows":
+                print("[*] Windows detected. Sanitizing PATH to avoid stale chromedriver binaries...")
+                system_path = os.environ.get("PATH", "")
+                path_entries = [entry for entry in system_path.split(os.pathsep) if entry]
+                filtered_entries = []
+                removed_entries = []
 
-                if resolved_browser_path and Path(resolved_browser_path).exists():
-                    options.binary_location = resolved_browser_path
+                for entry in path_entries:
+                    candidate = Path(entry) / "chromedriver.exe"
+                    if candidate.exists():
+                        removed_entries.append(str(candidate))
+                    else:
+                        filtered_entries.append(entry)
 
-                if resolved_driver_path and Path(resolved_driver_path).exists():
-                    print(f"[*] Using Selenium Manager driver path: {resolved_driver_path}")
-                    service = ChromeService(executable_path=resolved_driver_path)
+                service_env = os.environ.copy()
+                service_env["PATH"] = os.pathsep.join(filtered_entries)
+
+                if removed_entries:
+                    print(f"[*] Ignoring {len(removed_entries)} PATH location(s) containing chromedriver.exe.")
+                    for removed in removed_entries:
+                        print(f"    - {removed}")
                 else:
-                    print("[!] Selenium Manager did not return a usable driver path. Falling back to default ChromeService.")
-            elif platform.system() == "Windows":
-                print("[!] SeleniumManager class not available in this Selenium version. Falling back to default ChromeService.")
+                    print("[*] No chromedriver.exe found in PATH entries.")
+
+                service = ChromeService(env=service_env)
 
             if service is None:
                 # Initialize ChromeService WITHOUT executable_path.
