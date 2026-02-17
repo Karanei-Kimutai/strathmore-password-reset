@@ -18,6 +18,10 @@ from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService
+try:
+    from selenium.webdriver.common.selenium_manager import SeleniumManager
+except ImportError:
+    SeleniumManager = None
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
@@ -755,10 +759,34 @@ def setup_chrome_driver():
 
 
         try:
-            # Initialize ChromeService WITHOUT executable_path.
-            # Selenium Manager will automatically find/download the driver.
-            print("[*] Initializing ChromeService (Selenium Manager will handle driver)...")
-            service = ChromeService()
+            service = None
+
+            # On Windows, explicitly resolve the driver path through Selenium Manager.
+            # This avoids stale chromedriver binaries in PATH overriding the resolved version.
+            if platform.system() == "Windows" and SeleniumManager is not None:
+                print("[*] Windows detected. Resolving ChromeDriver path via Selenium Manager...")
+                manager = SeleniumManager()
+                resolved_paths = manager.binary_paths(["--browser", "chrome"])
+                resolved_driver_path = resolved_paths.get("driver_path")
+                resolved_browser_path = resolved_paths.get("browser_path")
+
+                if resolved_browser_path and Path(resolved_browser_path).exists():
+                    options.binary_location = resolved_browser_path
+
+                if resolved_driver_path and Path(resolved_driver_path).exists():
+                    print(f"[*] Using Selenium Manager driver path: {resolved_driver_path}")
+                    service = ChromeService(executable_path=resolved_driver_path)
+                else:
+                    print("[!] Selenium Manager did not return a usable driver path. Falling back to default ChromeService.")
+            elif platform.system() == "Windows":
+                print("[!] SeleniumManager class not available in this Selenium version. Falling back to default ChromeService.")
+
+            if service is None:
+                # Initialize ChromeService WITHOUT executable_path.
+                # Selenium Manager will automatically find/download the driver.
+                print("[*] Initializing ChromeService (Selenium Manager will handle driver)...")
+                service = ChromeService()
+
             driver = webdriver.Chrome(service=service, options=options)
             print("[+] ChromeDriver initialized successfully via Selenium Manager.")
             return driver
