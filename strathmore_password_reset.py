@@ -699,9 +699,9 @@ def validate_environment():
     return True
 
 def setup_chrome_driver():
-    """Sets up Chrome WebDriver using Selenium Manager for local/WSL
-       or explicit path for Docker."""
+    """Sets up Chrome WebDriver with platform-aware driver resolution."""
     options = webdriver.ChromeOptions()
+    service_kwargs = {}
 
     # Standard options for headless operation
     options.add_argument('--headless=new')
@@ -710,12 +710,17 @@ def setup_chrome_driver():
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
     options.add_argument('--disable-blink-features=AutomationControlled')
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_argument('--log-level=3')
+    options.add_argument('--disable-logging')
+    options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
     options.add_experimental_option('useAutomationExtension', False)
     options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
 
     # Check if running in Docker
     is_docker = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
+    if platform.system() == "Windows":
+        # Suppress noisy chromedriver service logs on Windows.
+        service_kwargs["log_output"] = subprocess.DEVNULL
 
     print("[*] Setting up ChromeDriver...")
     if is_docker:
@@ -730,7 +735,7 @@ def setup_chrome_driver():
                  raise FileNotFoundError("Chromedriver executable not found or not executable at expected Docker paths.")
 
             print(f"[*] Using driver path: {driver_path_docker}")
-            service = ChromeService(executable_path=driver_path_docker)
+            service = ChromeService(executable_path=driver_path_docker, **service_kwargs)
             driver = webdriver.Chrome(service=service, options=options)
             print("[+] ChromeDriver initialized successfully from system path.")
             return driver
@@ -739,8 +744,7 @@ def setup_chrome_driver():
             traceback.print_exc()
             raise Exception("ChromeDriver setup failed in Docker container.")
     else:
-        # For local/WSL runs, rely on Selenium Manager
-        print("[*] Local/WSL/Windows environment detected. Using Selenium Manager.")
+        print("[*] Local/WSL/Windows environment detected. Using adaptive driver resolution.")
 
         # Optional: Check for Chrome in WSL and attempt install if missing
         if is_running_in_wsl():
@@ -785,7 +789,7 @@ def setup_chrome_driver():
                         )[0]
 
                     print(f"[*] Using webdriver-manager driver path: {driver_path_windows}")
-                    service = ChromeService(executable_path=str(driver_path_windows))
+                    service = ChromeService(executable_path=str(driver_path_windows), **service_kwargs)
                 except Exception as win_driver_error:
                     print(f"[!] webdriver-manager failed on Windows: {win_driver_error}")
                     print("[!] Falling back to Selenium Manager resolution.")
@@ -794,7 +798,7 @@ def setup_chrome_driver():
                 # Initialize ChromeService WITHOUT executable_path.
                 # Selenium Manager will automatically find/download the driver.
                 print("[*] Initializing ChromeService (Selenium Manager will handle driver)...")
-                service = ChromeService()
+                service = ChromeService(**service_kwargs)
 
             driver = webdriver.Chrome(service=service, options=options)
             print("[+] ChromeDriver initialized successfully.")
