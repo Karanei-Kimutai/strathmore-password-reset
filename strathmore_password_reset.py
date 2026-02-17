@@ -21,6 +21,7 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 
 # Load environment variables
@@ -757,34 +758,37 @@ def setup_chrome_driver():
         try:
             service = None
 
-            # On Windows, remove PATH entries that already contain chromedriver.exe.
-            # This prevents stale global drivers (e.g. C:\Windows\chromedriver.exe)
-            # from overriding the version selected by Selenium Manager.
+            # On Windows, prefer webdriver-manager with an explicit driver path.
+            # This bypasses stale global drivers and avoids Selenium Manager PATH issues.
             if platform.system() == "Windows":
-                print("[*] Windows detected. Sanitizing PATH to avoid stale chromedriver binaries...")
-                system_path = os.environ.get("PATH", "")
-                path_entries = [entry for entry in system_path.split(os.pathsep) if entry]
-                filtered_entries = []
-                removed_entries = []
+                print("[*] Windows detected. Resolving matching ChromeDriver via webdriver-manager...")
+                try:
+                    driver_path_windows = Path(ChromeDriverManager().install())
 
-                for entry in path_entries:
-                    candidate = Path(entry) / "chromedriver.exe"
-                    if candidate.exists():
-                        removed_entries.append(str(candidate))
-                    else:
-                        filtered_entries.append(entry)
+                    # webdriver-manager may occasionally return a non-executable file
+                    # (e.g. THIRD_PARTY_NOTICES.chromedriver). Force the real driver binary.
+                    if driver_path_windows.name.lower() != "chromedriver.exe":
+                        print(f"[!] webdriver-manager returned non-binary path: {driver_path_windows}")
+                        candidate_paths = [driver_path_windows.parent / "chromedriver.exe"]
+                        candidate_paths.extend(driver_path_windows.parent.rglob("chromedriver.exe"))
+                        candidate_paths = [p for p in candidate_paths if p.is_file()]
 
-                service_env = os.environ.copy()
-                service_env["PATH"] = os.pathsep.join(filtered_entries)
+                        if not candidate_paths:
+                            raise FileNotFoundError(
+                                f"Could not locate chromedriver.exe near: {driver_path_windows.parent}"
+                            )
 
-                if removed_entries:
-                    print(f"[*] Ignoring {len(removed_entries)} PATH location(s) containing chromedriver.exe.")
-                    for removed in removed_entries:
-                        print(f"    - {removed}")
-                else:
-                    print("[*] No chromedriver.exe found in PATH entries.")
+                        # Prefer the shortest/closest match in the cache tree.
+                        driver_path_windows = sorted(
+                            set(candidate_paths),
+                            key=lambda p: len(str(p))
+                        )[0]
 
-                service = ChromeService(env=service_env)
+                    print(f"[*] Using webdriver-manager driver path: {driver_path_windows}")
+                    service = ChromeService(executable_path=str(driver_path_windows))
+                except Exception as win_driver_error:
+                    print(f"[!] webdriver-manager failed on Windows: {win_driver_error}")
+                    print("[!] Falling back to Selenium Manager resolution.")
 
             if service is None:
                 # Initialize ChromeService WITHOUT executable_path.
@@ -793,20 +797,20 @@ def setup_chrome_driver():
                 service = ChromeService()
 
             driver = webdriver.Chrome(service=service, options=options)
-            print("[+] ChromeDriver initialized successfully via Selenium Manager.")
+            print("[+] ChromeDriver initialized successfully.")
             return driver
         except WebDriverException as wde:
              # Catch specific Selenium errors, often version mismatch or driver not found
              print(f"[-] Selenium WebDriverException during setup: {wde}")
-             print("[!] This might indicate Selenium Manager failed to find/download the correct driver.")
+             print("[!] This might indicate driver resolution failed (webdriver-manager/Selenium Manager).")
              print("[!] Ensure Google Chrome is installed and accessible in your PATH.")
-             print("[!] Or, try manually installing chromedriver and adding it to your PATH.")
+             print("[!] If this persists, remove stale chromedriver.exe files from system locations.")
              traceback.print_exc()
-             raise Exception(f"Failed to initialize ChromeDriver using Selenium Manager: {wde}")
+             raise Exception(f"Failed to initialize ChromeDriver: {wde}")
         except Exception as e:
-            print(f"[-] Unexpected error during Selenium Manager setup: {e}")
+            print(f"[-] Unexpected error during ChromeDriver setup: {e}")
             traceback.print_exc()
-            raise Exception(f"Could not initialize ChromeDriver using Selenium Manager: {e}")
+            raise Exception(f"Could not initialize ChromeDriver: {e}")
 
 
 def main():
