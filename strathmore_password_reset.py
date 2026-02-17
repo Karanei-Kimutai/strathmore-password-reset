@@ -183,8 +183,28 @@ def send_password_email(username, password):
 
 # --- Environment Detection ---
 
+def is_running_in_docker():
+    """Checks if running inside a Docker container."""
+    docker_env_flag = os.getenv("RUNNING_IN_DOCKER", "").strip().lower()
+    if docker_env_flag in {"1", "true", "yes", "y"}:
+        return True
+
+    if Path("/.dockerenv").exists():
+        return True
+
+    try:
+        cgroup_content = Path("/proc/1/cgroup").read_text(encoding="utf-8", errors="ignore").lower()
+        if "docker" in cgroup_content or "containerd" in cgroup_content:
+            return True
+    except Exception:
+        pass
+
+    return False
+
 def is_running_in_wsl():
     """Checks if running inside Windows Subsystem for Linux."""
+    if is_running_in_docker():
+        return False
     return 'WSL_DISTRO_NAME' in os.environ or 'microsoft' in platform.uname().release.lower()
 
 def install_chrome_wsl():
@@ -717,7 +737,7 @@ def setup_chrome_driver():
     options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
 
     # Check if running in Docker
-    is_docker = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
+    is_docker = is_running_in_docker()
     if platform.system() == "Windows":
         # Suppress noisy chromedriver service logs on Windows.
         service_kwargs["log_output"] = subprocess.DEVNULL
