@@ -31,7 +31,7 @@ def test_env_variables():
         "EMAIL_ADDRESS": os.getenv("EMAIL_ADDRESS"),
         "EMAIL_PASSWORD": os.getenv("EMAIL_PASSWORD"),
         "IMAP_SERVER": os.getenv("IMAP_SERVER"),
-        "USERNAME": os.getenv("USERNAME"),
+        "STRATHMORE_USERNAME": os.getenv("STRATHMORE_USERNAME"),
     }
     optional_vars = {
         "SMTP_SERVER": os.getenv("SMTP_SERVER", "smtp.gmail.com"),

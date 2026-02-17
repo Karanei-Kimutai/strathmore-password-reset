@@ -40,7 +40,7 @@ IMAP_SERVER=imap.gmail.com
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 NOTIFICATION_EMAIL=your.email@strathmore.edu
-USERNAME=your_strathmore_username
+STRATHMORE_USERNAME=your_strathmore_username
 PASSWORD_LENGTH=16
 LOG_DIRECTORY=passwords
 ```

@@ -30,7 +30,7 @@ load_dotenv()
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.gmail.com")
-USERNAME = os.getenv("USERNAME")  # Strathmore username
+STRATHMORE_USERNAME = os.getenv("STRATHMORE_USERNAME")  # Strathmore username (admission number)
 FRONTEND_URL = "https://su-sso.strathmore.edu/student-pss/public/forgottenpassword"
 PASSWORD_LENGTH = int(os.getenv("PASSWORD_LENGTH", "16"))
 LOG_DIRECTORY = os.getenv("LOG_DIRECTORY", "passwords")
@@ -675,7 +675,7 @@ def validate_environment():
         "EMAIL_ADDRESS": EMAIL_ADDRESS,
         "EMAIL_PASSWORD": EMAIL_PASSWORD,
         "IMAP_SERVER": IMAP_SERVER,
-        "USERNAME": USERNAME,
+        "STRATHMORE_USERNAME": STRATHMORE_USERNAME,
     }
 
     missing = [var for var, value in required_vars.items() if not value]
@@ -691,8 +691,8 @@ def validate_environment():
     if not EMAIL_ADDRESS or "@" not in EMAIL_ADDRESS:
         print(f"[-] Invalid or missing EMAIL_ADDRESS: {EMAIL_ADDRESS}")
         return False
-    if not USERNAME:
-         print(f"[-] Missing USERNAME.")
+    if not STRATHMORE_USERNAME:
+         print(f"[-] Missing STRATHMORE_USERNAME.")
          return False
 
     return True
@@ -803,7 +803,7 @@ def main():
         driver = setup_chrome_driver()
 
         # Phase 1: Request password reset
-        if not request_password_reset(driver, USERNAME):
+        if not request_password_reset(driver, STRATHMORE_USERNAME):
             raise Exception("Failed to request password reset")
 
         # Phase 2: Retrieve reset link from email
@@ -821,16 +821,16 @@ def main():
             raise Exception("Failed to complete password reset")
 
         # Phase 5: Log the new password securely
-        log_new_password(USERNAME, new_password)
+        log_new_password(STRATHMORE_USERNAME, new_password)
 
         # Phase 6: Send password notification email
-        email_sent = send_password_email(USERNAME, new_password)
+        email_sent = send_password_email(STRATHMORE_USERNAME, new_password)
 
         # Success summary
         print("\n" + "=" * 60)
         print("✓ PASSWORD RESET COMPLETED SUCCESSFULLY")
         print("=" * 60)
-        print(f"Username: {USERNAME}")
+        print(f"Username: {STRATHMORE_USERNAME}")
         print(f"Password: {new_password}")
         print(f"Logged to files in: {LOG_DIRECTORY}/")
         print(f"Email sent to: {NOTIFICATION_EMAIL if email_sent else 'FAILED'}")

@@ -121,7 +121,7 @@ SMTP_PORT=587
 NOTIFICATION_EMAIL=your.email@strathmore.edu
 
 # Strathmore credentials
-USERNAME=your_strathmore_username
+STRATHMORE_USERNAME=your_strathmore_username
 
 # Password settings
 PASSWORD_LENGTH=16
